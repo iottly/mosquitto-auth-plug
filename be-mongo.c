@@ -20,6 +20,7 @@ struct mongo_backend {
     mongoc_client_t *client;
     char *host;
     int port;
+    char *cluster_connstr;
     char *database;
     char *users_coll;
     char *topics_coll;
@@ -32,7 +33,7 @@ struct mongo_backend {
 void *be_mongo_init()
 {
     struct mongo_backend *conf;
-    char *host, *p, *user, *password, *authSource;
+    char *host, *p, *user, *password, *authSource, *cluster_connstr;
     char *database, *users_coll, *topics_coll, *password_loc, *topic_loc;
     char *topicId_loc, *superuser_loc;
 
@@ -44,7 +45,11 @@ void *be_mongo_init()
 	
     if ((p = p_stab("mongo_port")) == NULL){
         p = "27017";
-	}
+    }
+
+    if ((cluster_connstr = p_stab("mongo_clusterconnstr")) == NULL){
+        cluster_connstr = NULL;
+    }
 	
     if ((database = p_stab("mongo_database")) == NULL){
         conf->database = "mqGate";
@@ -92,23 +97,29 @@ void *be_mongo_init()
     password = p_stab("mongo_password");
     authSource = p_stab("mongo_authSource");
 
-    char uristr[128] = {0};
-    strcpy(uristr, "mongodb://");
-    if (user != NULL) {
-	strcat(uristr, user);
-        if (password != NULL) {
-	   strcat(uristr, ":");
-	   strcat(uristr, password);
-	}
-	   strcat(uristr, "@");
+    char uristr[256] = {0};
+
+    if (cluster_connstr == NULL) {
+        strcpy(uristr, "mongodb://");
+        if (user != NULL) {
+        strcat(uristr, user);
+            if (password != NULL) {
+           strcat(uristr, ":");
+           strcat(uristr, password);
+        }
+           strcat(uristr, "@");
+        }
+        strcat(uristr, host);
+        strcat(uristr, ":");
+        strcat(uristr, p);
+        if (authSource != NULL) {
+            strcat(uristr, "?authSource=");
+            strcat(uristr, authSource);
+        }
+    } else {
+        strcpy(uristr, cluster_connstr);
     }
-    strcat(uristr, host);
-    strcat(uristr, ":");
-    strcat(uristr, p);
-    if (authSource != NULL) {
-        strcat(uristr, "?authSource=");
-        strcat(uristr, authSource);
-    }
+
     
     mongoc_init ();
     conf->client = mongoc_client_new (uristr);
